@@ -1,44 +1,49 @@
 import sys
 import ast
 
-"""
-Bubbles is a experimental, fun Super-Set Language for Python.
+"""-----------------------------------------------------------------------------
+BUBBLES:
+Is a experimental, functional and fun Super-Set Language for Python!
+The aim is to provide beautiful and functional syntax!
 
-The primary aim is to provide more beautiful syntax, encourage programmers to
-think functionally, and possibly more!
-
-Currently it:
-- Supports Haskell-style Functional control and pattern matching.
+Currently features:
+- Supports Haskell-style functionals and pattern matching.
 - Has new keywords for easy readibility:
     isnt == not --> if element isnt in set
 
 Ideas / To Do:
 - Haskell-like type system, can add type constraints to functions
-- Improved security, constrain I/O
-- Simple/Easy syntax for Meta Programming and Dynamic Object Creation
-
+- Improved security, constrain I/O or sys calls?
+- Partial Application for currying?
+- Simple/Easy syntax for Meta Programming
+- Neater Object Oriented syntax:
 - Remove explicit .self in class declarations, use implicit scoping
 - Remove or replace object __init__ constructor syntax
 
+Copyright 2018 - Tom Watts: twatts@protonmail.com
 
-It can be used either within Python: python bubbles example.bb
-Potentially will have binary for command line use: bubbles example.bb
+-----------------------------------------------------------------------------"""
 
-Copyright 2018 - Thomas Watts - twatts@protonmail.com
-"""
 
 keywords = ["if", "else", "elif", "not", "in", "for", "return", "*", "+", "-", "/"
             "while", "and", "False", "True", "|", ":", "=", "import", "as"]
 
+# Not yet used
 function_map = {}
 
-# No statements can have only 0 or 1 tokens
+# Used for keeping track of dependencies / imports
+file_map = {}
+
+
+#------------------------- Patterns and Translation ----------------------------
+
+# No statements can have only 0 or 1 tokens (unless start)
 def empty(line):
     tokens = line.split()
-    # return len(tokens) == 0 or len(tokens) == 1
     return len(tokens) == 0 or (len(tokens) == 1 and tokens[0] != "start")
 
 
+# Swap new keywords with their traditional Python counterparts
 def matchKeywords(line):
     return line.replace("isnt", "not")
 
@@ -50,11 +55,9 @@ equalPos = lambda t, i: (
     (t[i-1] !=">" and t[i]=="=") or
     (t[i-1] !="<" and t[i]=="=")
     )
-
 # Check if the above pattern is in an array
 equalIndex = lambda t: [equalPos(t, i) for i in range(1, len(t)-1)].index(True) + 1
-
-
+# Check if a line is an assignment statement
 def assignment(line):
     tokens = line.split()
     for i in range(1, len(tokens)):
@@ -64,7 +67,7 @@ def assignment(line):
     return False
 
 
-# Check if have a valid function body
+# Check if there is a valid function body
 def functionBody(line, indent):
     if not line:
         return False
@@ -73,8 +76,6 @@ def functionBody(line, indent):
         return False
     # Need checks here!!! Otherwise things will blow up
     return True
-
-
 # Parse and Translate Bubbles inner function, to a Python function's body
 def parseFunctionBody(text, translation, indent, k):
     text[0] = text[0].replace("isnt", "not")
@@ -123,8 +124,6 @@ def parseFunction(text, translation, indent, k):
         print("Error on line: ", k)
         raise SyntaxError("Expected Indent after function declaration.")
     return parseFunctionBody(text[1:], translation + lmbda + declaration, indent+1, k+1)
-
-
 # Check if we have a valid function declaration
 def functionDeclaration(line, indent):
     tokens = line.split()
@@ -155,8 +154,6 @@ def parseFunctionEval(text, translation, indent, k):
         eval+= t + ","
     eval += tokens[-1] + ")"
     return parse(text[1:], translation+eval, indent, k+1)
-
-
 # Check if we a line is evaluating a Bubbles function
 def functionEvalualation(line, indent):
     tokens = line.split()
@@ -168,6 +165,7 @@ def functionEvalualation(line, indent):
     return True
 
 
+# Convert nice looking single line lambda to Python's version
 def parseSingleLineLambda(text, translation, indent, k):
     tokens = text[0].split()
     index = equalIndex(tokens)
@@ -178,9 +176,7 @@ def parseSingleLineLambda(text, translation, indent, k):
     for t in tokens[index+1:]:
         lmbda += t + " "
     lmbda += "\n"
-
     return parse(text[1:], translation + lmbda, indent, k+1)
-
 # Check if we have a single line lambda of form: name (variables ...) = (body)
 def singleLineLambda(line, indent):
     if not assignment(line):
@@ -197,6 +193,7 @@ def singleLineLambda(line, indent):
             continue
     return True
 
+
 # A special keyword start, is used to replace if __name__ == "__main__":
 def startDeclaration(line):
     tokens = line.split()
@@ -205,12 +202,23 @@ def startDeclaration(line):
     if len(tokens) == 1 and tokens[0] == "start":
         return True
     return False
-
 # there must be a function calleed (start program) in order to use start
 def parseStart(text, translation, indent, k):
     stmt = "start(True) \n"
     return parse(text[1:], translation + stmt, indent, k+1)
 
+
+# Check if we have a statement of form: include .... (files can be .py or .bb)
+def importStatement(line):
+    tokens = line.split()
+    return tokens[0] == "include"
+# Parse the above
+def parseImport(text, translation, indent, k):
+    tokens = text[0].split()
+    block = translate(tokens[1])
+    return parse(text[1:], translation + block, indent, k+1)
+
+#------------------------------ Main Loop --------------------------------------
 
 # Use tail recursion to parse and translate Bubbles code to Python code
 def parse(text, translation, indent, k):
@@ -219,9 +227,11 @@ def parse(text, translation, indent, k):
     text[0] = text[0].split('#', 1)[0]
     text[0] = matchKeywords(text[0])
 
-    # Check Unique syntax patterns
+    # Check and parse unique syntax patterns
     if empty(text[0]):
         return parse(text[1:], translation + text[0], indent, k+1)
+    if importStatement(text[0]):
+        return parseImport(text, translation, indent, k+1)
     if startDeclaration(text[0]):
         return parseStart(text, translation, indent, k+1)
     if singleLineLambda(text[0], indent):
@@ -231,13 +241,20 @@ def parse(text, translation, indent, k):
     # Otherwise keep line / do not translate
     return parse(text[1:], translation + text[0], indent, k+1)
 
+#-------------------------------------------------------------------------------
+
+def translate(file):
+    try:
+        f = open(file,"r")
+        text = [t for t in f]
+        return parse(text, "", indent=0, k=0)
+    except:
+        return False
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Bubbles needs code!")
     else:
-        f = open(sys.argv[1],"r")
-        text = [t for t in f]
-        translation = parse(text, "", indent=0, k=0)
-        # print(translation)
+        translation = translate(sys.argv[1])
+        print(translation)
         exec(translation)
