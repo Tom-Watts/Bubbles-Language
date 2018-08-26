@@ -2,7 +2,7 @@
 
 Bubbles is a work in progress, experimental, fun Super-Set Language for Python!
 
-The primary aim is to provide beautiful syntax and provide functional Haskell-like control!
+The primary aim is to provide beautiful syntax and provide functional Haskell-like control within Python!
 
 #### Syntax examples:
 ```
@@ -23,7 +23,7 @@ factorial n
     | otherwise = n * factorial2 (n-1)
 
 start program
-    data = load("census-comp309.csv")
+    data = load("x.csv")
     training, test = horizontalSlice(data, 3000)
     training_x = split(training)[0]
     imputed_x = impute(training_x, "mean")
@@ -39,13 +39,13 @@ start
 
 #### Ideas of things to do:
 - Haskell-like type system, can add type constraints to functions
-  Definitely have dynamic type checking for these functions, making compile time checks might not be possible.
+- Definitely have dynamic type checking for these functions, making compile time checks might not be possible.
 - Improved security, constrain I/O?
 - Simple/Easy syntax for Meta Programming and Dynamic Object Creation
 
 - Create beautified syntax for Classes and add more functional control:
-  Remove explicit .self in class declarations, use implicit scoping
-  Remove or replace object __init__ constructor syntax
+-  Remove explicit .self in class declarations, use implicit scoping
+- Remove or replace object __init__ constructor syntax
 
 
 It can be used either within Python: python bubbles example.bb
