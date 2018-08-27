@@ -29,10 +29,39 @@ keywords = ["if", "else", "elif", "not", "in", "for", "return", "*", "+", "-", "
             "while", "and", "False", "True", "|", ":", "=", "import", "as"]
 
 # Not yet used
-function_map = {}
+bubbles_function_map = {}
 
 # Used for keeping track of dependencies / imports
 file_map = {}
+
+# For Algebraic Data Types, some defaults provided:
+type_map = {
+    "Bool": ["bool"],
+    "String": ["str"],
+    "Number": ["int", "float"]
+}
+
+# Use Type constraints and dynamic checking for functions
+# No static checking, this will take a lot of brain power
+def bubblesFuncConstrainer(func_name, *args):
+    f, constraints = bubbles_function_map[func_name]
+    arg_set = [a for a in args]
+
+    if constraints[-1] not in list(type_map.keys()):
+        raise ValueError('Function Output type is not declared: ', func_name)
+
+    for a, c in zip(arg_set, constraints[:-1]):
+        if c not in list(type_map.keys()):
+            raise ValueError('Invalid Type Constraint: ', func_name)
+        matches = [t for t in type_map[c] if (str(type(a))=="<class '"+t+"'>")]
+        if len(matches) == 0:
+            raise ValueError('Non mathcing type, expected:', c, " in ", func_name)
+
+    result = f(*args)
+    matches = [t for t in type_map[constraints[-1]] if (str(type(result))=="<class '"+t+"'>")]
+    if len(matches) == 0:
+        raise ValueError('Function output type does not match constraint:', func_name)
+    return result
 
 
 #------------------------- Patterns and Translation ----------------------------
@@ -100,30 +129,87 @@ def parseFunctionBody(text, translation, indent, k):
     return parse(text[1:], translation + statement, indent, k+1)
 
 
+
+# Unused:
+# Could keep Haskell evaluation syntax, e.g. add 3 4
+# Better to keep consistent with Python e.g. add(3,4)
+def parseFunctionEval(text, translation, indent, k):
+    print("evaluating function eval")
+    tokens = text[0].split()
+    eval = tokens[0] + "("
+    for t in tokens[1:-1]:
+        eval+= t + ","
+    eval += tokens[-1] + ")"
+    return parse(text[1:], translation+eval, indent, k+1)
+
+# Check if we a line is evaluating a Bubbles function
+def functionEvalualation(line, indent):
+    tokens = line.split()
+    if True in [(t in keywords) for t in tokens]:
+        return False
+    if tokens[-1][-1] == ":":
+        return False
+    # Probably need to do some checks here to be 100% certain no overlap with decs
+    return True
+
+
 # Create declarations for a python function and lambda to reference it
 # We can't use complex chains (e.g. if/else) normally in Python's Lambdas
 # That is why there is a normal function, and then a lambda to be passed around.
-def parseFunction(text, translation, indent, k):
-    # return parse(text[1:], translation + text[0])
-    tokens = text[0].split()
-    function_map[tokens[0]] = True
-    lmbda = tokens[0] + " = lambda "
-    for i in range(1, len(tokens)-1):
-        lmbda += tokens[i] + ","
-    lmbda += tokens[-1]
-    lmbda += ": " + tokens[0] + "_BUBBLES_DEF("
-    for i in range(1, len(tokens)-1):
-        lmbda += tokens[i] + ","
-    lmbda += tokens[-1]
-    lmbda += ") \n \n"
-    declaration = "def " + tokens[0] + "_BUBBLES_DEF("
-    for i in range(1, len(tokens)-1):
-        declaration += tokens[i] + ","
-    declaration += tokens[-1] + "): \n"
-    if not functionBody(text[1], indent+1):
-        print("Error on line: ", k)
-        raise SyntaxError("Expected Indent after function declaration.")
+def parseFunction(text, translation, indent, k, constraints):
+    if constraints == None:
+        tokens = text[0].split()
+        lmbda = tokens[0] + " = lambda "
+        for i in range(1, len(tokens)-1):
+            lmbda += tokens[i] + ","
+        lmbda += tokens[-1]
+        lmbda += ": " + tokens[0] + "_BUBBLES_DEF("
+        for i in range(1, len(tokens)-1):
+            lmbda += tokens[i] + ","
+        lmbda += tokens[-1]
+        lmbda += ") \n \n"
+        declaration = "def " + tokens[0] + "_BUBBLES_DEF("
+        for i in range(1, len(tokens)-1):
+            declaration += tokens[i] + ","
+        declaration += tokens[-1] + "): \n"
+        if not functionBody(text[1], indent+1):
+            print("Error on line: ", k)
+            raise SyntaxError("Expected Indent after function declaration.")
+    else:
+        tokens = text[0].split()
+        lmbda = " lambda "
+        for i in range(1, len(tokens)-1):
+            lmbda += tokens[i] + ","
+        lmbda += tokens[-1]
+        lmbda += ": " + tokens[0] + "_BUBBLES_DEF("
+        for i in range(1, len(tokens)-1):
+            lmbda += tokens[i] + ","
+        lmbda += tokens[-1]
+        lmbda += ") \n \n"
+
+        exec("bubbles_function_map[tokens[0]] = (" + lmbda + ", " + str(constraints) + ")")
+
+        tokens = text[0].split()
+        lmbda = tokens[0] + " = lambda "
+        for i in range(1, len(tokens)-1):
+            lmbda += tokens[i] + ","
+        lmbda += tokens[-1]
+        lmbda += ": bubblesFuncConstrainer(\"" + tokens[0] + "\", "
+        for i in range(1, len(tokens)-1):
+            lmbda += tokens[i] + ","
+        lmbda += tokens[-1]
+        lmbda += ") \n \n"
+
+        declaration = "def " + tokens[0] + "_BUBBLES_DEF("
+        for i in range(1, len(tokens)-1):
+            declaration += tokens[i] + ","
+        declaration += tokens[-1] + "): \n"
+        if not functionBody(text[1], indent+1):
+            print("Error on line: ", k)
+            raise SyntaxError("Expected Indent after function declaration.")
+
     return parseFunctionBody(text[1:], translation + lmbda + declaration, indent+1, k+1)
+
 # Check if we have a valid function declaration
 def functionDeclaration(line, indent):
     tokens = line.split()
@@ -143,40 +229,43 @@ def functionDeclaration(line, indent):
     return True
 
 
-# Unused:
-# Could keep Haskell evaluation syntax, e.g. add 3 4
-# Better to keep consistent with Python e.g. add(3,4)
-def parseFunctionEval(text, translation, indent, k):
-    print("evaluating function eval")
-    tokens = text[0].split()
-    eval = tokens[0] + "("
-    for t in tokens[1:-1]:
-        eval+= t + ","
-    eval += tokens[-1] + ")"
-    return parse(text[1:], translation+eval, indent, k+1)
-# Check if we a line is evaluating a Bubbles function
-def functionEvalualation(line, indent):
-    tokens = line.split()
-    if True in [(t in keywords) for t in tokens]:
-        return False
-    if tokens[-1][-1] == ":":
-        return False
-    # Probably need to do some checks here to be 100% certain no overlap with decs
-    return True
-
-
 # Convert nice looking single line lambda to Python's version
-def parseSingleLineLambda(text, translation, indent, k):
-    tokens = text[0].split()
-    index = equalIndex(tokens)
-    lmbda = tokens[0] + " = lambda "
-    for i in range(1, index-1):
-        lmbda += tokens[i] + ", "
-    lmbda += tokens[index-1] + " : "
-    for t in tokens[index+1:]:
-        lmbda += t + " "
-    lmbda += "\n"
+def parseSingleLineLambda(text, translation, indent, k, constraints):
+    if constraints == None:
+        tokens = text[0].split()
+        index = equalIndex(tokens)
+        lmbda = tokens[0] + " = lambda "
+        for i in range(1, index-1):
+            lmbda += tokens[i] + ", "
+        lmbda += tokens[index-1] + " : "
+        for t in tokens[index+1:]:
+            lmbda += t + " "
+        lmbda += "\n"
+    else:
+        tokens = text[0].split()
+        index = equalIndex(tokens)
+        lmbda = "lambda "
+        for i in range(1, index-1):
+            lmbda += tokens[i] + ", "
+        lmbda += tokens[index-1] + " : "
+        for t in tokens[index+1:]:
+            lmbda += t + " "
+        lmbda += "\n"
+
+        exec("bubbles_function_map[tokens[0]] = (" + lmbda + ", " + str(constraints) + ")")
+
+        lmbda = tokens[0] + " = lambda "
+        for i in range(1, index-1):
+            lmbda += tokens[i] + ", "
+        lmbda += tokens[index-1] + " : bubblesFuncConstrainer(\"" + tokens[0] + "\", "
+        for i in range(1, index-1):
+            lmbda += tokens[i] + ", "
+        lmbda += tokens[index-1] + ")"
+        lmbda += "\n"
+
     return parse(text[1:], translation + lmbda, indent, k+1)
+
+
 # Check if we have a single line lambda of form: name (variables ...) = (body)
 def singleLineLambda(line, indent):
     if not assignment(line):
@@ -193,6 +282,41 @@ def singleLineLambda(line, indent):
             continue
     return True
 
+
+def typeConstraint(line):
+    tokens = line.split()
+    if len(tokens) < 2:
+        return False
+    return tokens[1] == "::"
+
+def parseTypeConstraint(text, translation, indent, k):
+    # Clean tokens again, since we can potentially be skipping parse()
+    tokens = [t for t in text[0].split() if t != "->"]
+    text[1] = text[1].split('#', 1)[0]
+    text[1] = matchKeywords(text[1])
+    # Parse the next line with the constraints on this line
+    if singleLineLambda(text[1], indent):
+        return parseSingleLineLambda(text[1:], translation, indent, k+1, tokens[2:])
+
+    if functionDeclaration(text[1], indent):
+        return parseFunction(text[1:], translation, indent, k+1, tokens[2:])
+
+    return parse(text[1:], translation, indent, k+1)
+
+def typeStatement(line):
+    tokens = line.split()
+    if len(tokens) == 0:
+        return False
+    return tokens[0] == "Type"
+
+
+def parseType(text, translation, indent, k):
+    tokens = text[0].split()
+    type = tokens[1]
+    sub_types = [t for t in tokens[3:] if t != "|"]
+    type_map[type] = sub_types
+
+    return parse(text[1:], translation, indent, k+1)
 
 # A special keyword start, is used to replace if __name__ == "__main__":
 def startDeclaration(line):
@@ -230,14 +354,25 @@ def parse(text, translation, indent, k):
     # Check and parse unique syntax patterns
     if empty(text[0]):
         return parse(text[1:], translation + text[0], indent, k+1)
+
+    if typeStatement(text[0]):
+        return parseType(text, translation, indent, k+1)
+
+    if typeConstraint(text[0]):
+        return parseTypeConstraint(text, translation, indent, k+1)
+
     if importStatement(text[0]):
         return parseImport(text, translation, indent, k+1)
+
     if startDeclaration(text[0]):
         return parseStart(text, translation, indent, k+1)
+
     if singleLineLambda(text[0], indent):
-        return parseSingleLineLambda(text, translation, indent, k+1)
+        return parseSingleLineLambda(text, translation, indent, k+1, None)
+
     if functionDeclaration(text[0], indent):
-        return parseFunction(text, translation, indent, k+1)
+        return parseFunction(text, translation, indent, k+1, None)
+
     # Otherwise keep line / do not translate
     return parse(text[1:], translation + text[0], indent, k+1)
 
@@ -256,5 +391,5 @@ if __name__ == "__main__":
         print("Bubbles needs code!")
     else:
         translation = translate(sys.argv[1])
-        print(translation)
+        # print(translation)
         exec(translation)
