@@ -6,6 +6,9 @@ The primary aim is to provide beautiful syntax and provide functional Haskell-li
 
 #### Syntax examples:
 ```
+Type NumpyArray = numpy.float64 | numpy.ndarray
+
+ascending :: NumpyArray -> Bool
 ascending array = False isnt in (np.diff(array) >= 0)
 
 impute df method
@@ -18,6 +21,7 @@ load file
     | ascending(data.values[:,0]) = data.drop(data.columns[0], axis=1)
     | otherwise = data
 
+factiorial :: Number -> Number
 factorial n
     | n == 1 = 1
     | otherwise = n * factorial2 (n-1)
@@ -34,15 +38,14 @@ start
 
 #### Currently features:
 - Supports Haskell-style Functional control and pattern matching.
+- Basic Algebraic Data Types ( Union is to do )
+- Dynamic Function Type checking
 - Has new keywords for easy readibility:
     isnt == not --> if element isnt in set
 
 #### Ideas of things to do:
-- Haskell-like type system, can add type constraints to functions
-- Definitely have dynamic type checking for these functions, making compile time checks might not be possible.
-- Improved security, constrain I/O?
+- Security Features?
 - Simple/Easy syntax for Meta Programming and Dynamic Object Creation
-
 - Create beautified syntax for Classes and add more functional control:
 -  Remove explicit .self in class declarations, use implicit scoping
 - Remove or replace object __init__ constructor syntax
