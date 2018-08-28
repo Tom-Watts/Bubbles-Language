@@ -1,8 +1,7 @@
 # Bubbles-Language
 
-Bubbles is a work in progress, experimental, fun Super-Set Language for Python!
-
-The primary aim is to provide beautiful syntax and provide functional Haskell-like control within Python!
+Bubbles is a experimental, functional and fun Super-Set Language for Python!
+The aim is to provide beautiful and functional syntax!
 
 #### Syntax examples:
 ```
@@ -44,6 +43,8 @@ start
     isnt == not --> if element isnt in set
 
 #### Ideas of things to do:
+- Graph based Type/Set System, high level set functions
+- Folds?
 - Security Features?
 - Simple/Easy syntax for Meta Programming and Dynamic Object Creation
 - Create beautified syntax for Classes and add more functional control:
