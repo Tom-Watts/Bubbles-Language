@@ -7,12 +7,12 @@ Is a experimental, functional and fun Super-Set Language for Python!
 The aim is to provide beautiful and functional syntax!
 
 Currently features:
-- Supports Haskell-style functionals and pattern matching.
-- Has new keywords for easy readibility:
-    isnt == not --> if element isnt in set
+- Haskell-style functionals and pattern matching.
+- Basic Algebraic DataTypes ( no Union yet )
+- Dynamic Type Checking
+- (isnt == not) - usage - if element isnt in set
 
 Ideas / To Do:
-- Haskell-like type system, can add type constraints to functions
 - Improved security, constrain I/O or sys calls?
 - Partial Application for currying?
 - Simple/Easy syntax for Meta Programming
@@ -28,7 +28,7 @@ Copyright 2018 - Tom Watts: twatts@protonmail.com
 keywords = ["if", "else", "elif", "not", "in", "for", "return", "*", "+", "-", "/"
             "while", "and", "False", "True", "|", ":", "=", "import", "as"]
 
-# Not yet used
+# Used for checking functions with type constraints
 bubbles_function_map = {}
 
 # Used for keeping track of dependencies / imports
@@ -38,7 +38,11 @@ file_map = {}
 type_map = {
     "Bool": ["bool"],
     "String": ["str"],
-    "Number": ["int", "float"]
+    "None": ["NoneType"],
+    "Array": ["list"],
+    "Tuple": ["tuple"],
+    "_": [""], # WildCard
+    "Number": ["int", "float", "numpy.float64"]
 }
 
 # Use Type constraints and dynamic checking for functions
@@ -46,7 +50,6 @@ type_map = {
 def bubblesFuncConstrainer(func_name, *args):
     f, constraints = bubbles_function_map[func_name]
     arg_set = [a for a in args]
-
     if constraints[-1] not in list(type_map.keys()):
         raise ValueError('Function Output type is not declared: ', func_name)
 
@@ -54,22 +57,20 @@ def bubblesFuncConstrainer(func_name, *args):
         if c not in list(type_map.keys()):
             raise ValueError('Invalid Type Constraint: ', func_name)
         matches = [t for t in type_map[c] if (str(type(a))=="<class '"+t+"'>")]
-        if len(matches) == 0:
-            raise ValueError('Non mathcing type, expected:', c, " in ", func_name)
+        if len(matches) == 0 and c != "_":
+            raise ValueError('Non matching type, expected:', c, " in ", func_name)
 
     result = f(*args)
     matches = [t for t in type_map[constraints[-1]] if (str(type(result))=="<class '"+t+"'>")]
-    if len(matches) == 0:
+    if len(matches) == 0 and c != "_":
         raise ValueError('Function output type does not match constraint:', func_name)
     return result
 
-
 #------------------------- Patterns and Translation ----------------------------
-
-# No statements can have only 0 or 1 tokens (unless start)
+# White space
 def empty(line):
     tokens = line.split()
-    return len(tokens) == 0 or (len(tokens) == 1 and tokens[0] != "start")
+    return len(tokens) == 0
 
 
 # Swap new keywords with their traditional Python counterparts
@@ -103,31 +104,52 @@ def functionBody(line, indent):
     tokens = line.split()
     if len(tokens) == 0:
         return False
-    # Need checks here!!! Otherwise things will blow up
+    # If text continues to have indentation, pressume it is part of the func body
+    if line[0:4] != "    ":
+        return False
+    # Need more checks here!!! Otherwise things will blow up
     return True
+
 # Parse and Translate Bubbles inner function, to a Python function's body
 def parseFunctionBody(text, translation, indent, k):
     text[0] = text[0].replace("isnt", "not")
     tokens = text[0].split()
+    # If we don't have a guard ( a normal Python statement )
     if tokens[0] != "|":
-        if len(text) != 1 and functionBody(text[1], indent):
-            return parseFunctionBody(text[1:], translation + text[0], indent, k+1)
-        return parse(text[1:], translation + text[0], indent, k+1)
+        # Save the current statement ( it is pressumed to be part of the body)
+        stmt = text[0]
+        # Now clear any future lines which are comments or white space
+        # before checking if the next statement is still in line / part of the func
+        while len(text) != 1 and len(text[1].split('#', 1)[0].split()) == 0:
+            text = text[1:]
+
+        if len(text) != 1 and functionBody(text[0], indent):
+            return parseFunctionBody(text[1:], translation + stmt, indent, k+1)
+        return parse(text[1:], translation + stmt, indent, k+1)
+
+    # Given a guard: |
     index = equalIndex(tokens)
     statement = ""
+    # Need conditional statement before executing the below
     if(tokens[1] != "otherwise"):
         statement += "    if ("
         for t in tokens[1:index]:
             statement+= t + " "
-        statement += "): \n    "
+        statement += "): \n    " # extra pad so the below return is indented
+    # Otherwise there is an otherwise! generate return statement
     statement += "    return ("
     for t in tokens[index+1:]:
         statement+=t
     statement += ") \n"
-    if len(text) != 1 and functionBody(text[1], indent):
+
+    # Now clear any future lines which are comments or white space
+    # before checking if the next statement is still in line / part of the func
+    while len(text) != 1 and len(text[1].split('#', 1)[0].split()) == 0:
+        text = text[1:]
+
+    if len(text) != 1 and functionBody(text[0], indent):
         return parseFunctionBody(text[1:], translation + statement, indent, k+1)
     return parse(text[1:], translation + statement, indent, k+1)
-
 
 
 # Unused:
@@ -173,7 +195,6 @@ def parseFunction(text, translation, indent, k, constraints):
             declaration += tokens[i] + ","
         declaration += tokens[-1] + "): \n"
         if not functionBody(text[1], indent+1):
-            print("Error on line: ", k)
             raise SyntaxError("Expected Indent after function declaration.")
     else:
         tokens = text[0].split()
@@ -213,6 +234,8 @@ def parseFunction(text, translation, indent, k, constraints):
 # Check if we have a valid function declaration
 def functionDeclaration(line, indent):
     tokens = line.split()
+    if len(tokens) <= 1 and tokens[0] != "start":
+        return False
     if True in [(t in keywords) for t in tokens]:
         return False
     if tokens[-1][-1] == ":":
@@ -350,7 +373,6 @@ def parse(text, translation, indent, k):
         return translation
     text[0] = text[0].split('#', 1)[0]
     text[0] = matchKeywords(text[0])
-
     # Check and parse unique syntax patterns
     if empty(text[0]):
         return parse(text[1:], translation + text[0], indent, k+1)
@@ -374,6 +396,7 @@ def parse(text, translation, indent, k):
         return parseFunction(text, translation, indent, k+1, None)
 
     # Otherwise keep line / do not translate
+    print(text[0])
     return parse(text[1:], translation + text[0], indent, k+1)
 
 #-------------------------------------------------------------------------------
@@ -391,5 +414,5 @@ if __name__ == "__main__":
         print("Bubbles needs code!")
     else:
         translation = translate(sys.argv[1])
-        # print(translation)
+        print(translation)
         exec(translation)
